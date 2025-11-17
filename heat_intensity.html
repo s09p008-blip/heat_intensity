@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>二物体の熱のやりとりシミュレーション（g・J/(g·K)版）</title>
+  <style>
+    :root {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #1f2933;
+      background-color: #e5edf5;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+    }
+    body {
+      background: radial-gradient(circle at top, #f9fbff 0, #dde6f3 60%, #cfd8e3 100%);
+    }
+    .app {
+      display: flex;
+      height: 100vh;
+      min-height: 100vh;
+      padding: 10px;
+      gap: 10px;
+    }
+    .left-panel {
+      flex: 3;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-width: 0;
+    }
+    .card {
+      background: #ffffffee;
+      border-radius: 14px;
+      box-shadow: 0 8px 18px rgba(15, 23, 42, 0.16);
+      padding: 10px 14px 14px;
+      display: flex;
+      flex-direction: column;
+      backdrop-filter: blur(6px);
+    }
+    .card h2 {
+      margin: 0 0 4px;
+      font-size: 18px;
+      letter-spacing: .02em;
+    }
+    .card p.caption {
+      margin: 0 0 6px;
+      font-size: 12px;
+      color: #6b7280;
+    }
+    #simCanvas {
+      width: 100%;
+      height: clamp(220px, 35vh, 320px);
+      border-radius: 12px;
+      background: linear-gradient(180deg, #f9fafb, #e5e7eb);
+      touch-action: none;
+    }
+    #graphCanvas {
+      width: 100%;
+      height: clamp(160px, 28vh, 260px);
+      border-radius: 12px;
+      background: #f9fafb;
+      touch-action: none;
+    }
+    .heat-info {
+      margin-top: 6px;
+      font-size: 13px;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 2px;
+    }
+    .heat-info span.value {
+      font-weight: 600;
+      color: #111827;
+    }
+    .heat-info small { color: #6b7280; }
+    .graph-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 4px;
+      font-size: 13px;
+    }
+    .graph-header label {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      color: #4b5563;
+      cursor: pointer;
+    }
+    .control-panel {
+      flex: 1.3;
+      max-width: 360px;
+      min-width: 260px;
+      display: flex;
+      flex-direction: column;
+      background: #ffffffee;
+      border-radius: 14px;
+      box-shadow: 0 8px 20px rgba(15, 23, 42, 0.18);
+      padding: 10px 14px 14px;
+      overflow-y: auto;
+      backdrop-filter: blur(6px);
+    }
+    .control-panel h3 {
+      margin: 0 0 4px;
+      font-size: 15px;
+    }
+    .control-panel p.section-caption {
+      margin: 0 0 6px;
+      font-size: 11px;
+      color: #6b7280;
+    }
+    .control-group {
+      border-radius: 10px;
+      padding: 8px 10px;
+      background: #f3f4f6;
+      margin-bottom: 8px;
+    }
+    .control-group-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 4px;
+    }
+    .control-group-header span.label {
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .control-group-header span.sub {
+      font-size: 11px;
+      color: #6b7280;
+    }
+    .slider-row {
+      display: flex;
+      flex-direction: column;
+      margin-bottom: 4px;
+      gap: 2px;
+    }
+    .slider-row label {
+      font-size: 11px;
+      color: #4b5563;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+    }
+    .slider-row label span.value {
+      font-weight: 600;
+      font-size: 11px;
+      color: #111827;
+      margin-left: 4px;
+    }
+    .slider-row input[type="range"] {
+      width: 100%;
+      touch-action: pan-y;
+    }
+    /* モバイル向けスライダー */
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      height: 6px;
+      border-radius: 999px;
+      background: #d1d5db;
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #3b82f6;
+      box-shadow: 0 0 0 2px #e5e7eb;
+      cursor: pointer;
+      margin-top: -7px;
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #3b82f6;
+      border: none;
+      box-shadow: 0 0 0 2px #e5e7eb;
+      cursor: pointer;
+    }
+    .buttons-row {
+      display: flex;
+      gap: 8px;
+      margin: 6px 0 4px;
+    }
+    button {
+      border: none;
+      border-radius: 999px;
+      padding: 10px 18px;
+      font-size: 14px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      transition: transform 0.07s ease, box-shadow 0.07s ease, background 0.1s ease;
+      white-space: nowrap;
+      min-height: 40px;
+      flex: 1;
+      touch-action: manipulation;
+    }
+    button.primary {
+      background: linear-gradient(135deg, #3b82f6, #2563eb);
+      color: #f9fafb;
+      box-shadow: 0 4px 10px rgba(37, 99, 235, 0.55);
+    }
+    button.primary.paused {
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+      box-shadow: 0 4px 10px rgba(22, 163, 74, 0.55);
+    }
+    button.secondary {
+      background: #e5e7eb;
+      color: #111827;
+      box-shadow: 0 2px 6px rgba(148, 163, 184, 0.7);
+    }
+    button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(15, 23, 42, 0.25);
+    }
+    button:active {
+      transform: translateY(1px);
+      box-shadow: 0 2px 6px rgba(15, 23, 42, 0.3);
+    }
+    .small-note {
+      font-size: 11px;
+      color: #6b7280;
+      margin-top: 4px;
+    }
+    @media (max-width: 900px) {
+      .app {
+        flex-direction: column;
+        height: auto;
+      }
+      .control-panel {
+        max-width: none;
+        min-width: 0;
+        width: 100%;
+        order: 2;
+      }
+      .left-panel { order: 1; }
+    }
+    @media (max-width: 600px) {
+      .app { padding: 6px; }
+      .card h2 { font-size: 16px; }
+      button { font-size: 13px; }
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+  <div class="left-panel">
+    <div class="card">
+      <h2>二物体の熱のやりとり</h2>
+      <p class="caption">質量 m[g] と比熱 c[J/(g·K)] を自由に変えて、接触したときの温度と熱量の変化を調べましょう。</p>
+      <canvas id="simCanvas"></canvas>
+      <div class="heat-info">
+        <div>経過時間：<span id="timeDisplay" class="value">0.0</span> s</div>
+        <div>これまでに移動した熱量：
+          <span id="qDisplay" class="value">0</span> J
+          （<span id="directionDisplay">A → B</span>）
+        </div>
+        <div>温度：
+          A：<span id="T1Display" class="value">0</span> ℃ ／
+          B：<span id="T2Display" class="value">0</span> ℃
+          <small>（色が赤いほど高温）</small>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="graphCard">
+      <div class="graph-header">
+        <span>温度の時間変化グラフ</span>
+        <label>
+          <input type="checkbox" id="showGraph" checked>
+          グラフを表示
+        </label>
+      </div>
+      <canvas id="graphCanvas"></canvas>
+    </div>
+  </div>
+
+  <div class="control-panel">
+    <h3>設定パネル</h3>
+    <p class="section-caption">iPad やスマホでも操作しやすいように、ボタンとスライダーを大きめにしてあります。</p>
+
+    <!-- 再生系 -->
+    <div class="control-group">
+      <div class="control-group-header">
+        <span class="label">再生コントロール</span>
+      </div>
+      <div class="buttons-row">
+        <button id="playPauseBtn" class="primary paused">▶ 再生（接触させる）</button>
+        <button id="resetBtn" class="secondary">↺ リセット</button>
+      </div>
+      <div class="slider-row">
+        <label>
+          再生速度（時間の進み方）
+          <span class="value" id="speedDisplay">1.0×</span>
+        </label>
+        <input type="range" id="speedSlider" min="0.25" max="4" step="0.25" value="1">
+      </div>
+      <div class="slider-row">
+        <label>
+          熱の伝わりやすさ k
+          <span class="value" id="kDisplay">10 J/(s·K)</span>
+        </label>
+        <input type="range" id="kSlider" min="2" max="40" step="1" value="10">
+      </div>
+      <div class="small-note">※再生を押すとまず２つの物体が近づき，接触してから温度と熱量が変化します。</div>
+    </div>
+
+    <!-- 物体A -->
+    <div class="control-group">
+      <div class="control-group-header">
+        <span class="label">物体A（左）</span>
+        <span class="sub">赤寄りの色で表示</span>
+      </div>
+      <div class="slider-row">
+        <label>
+          質量 m₁ [g]
+          <span class="value" id="m1Display">100</span>
+        </label>
+        <input type="range" id="m1Slider" min="10" max="1000" step="10" value="100">
+      </div>
+      <div class="slider-row">
+        <label>
+          比熱 c₁ [J/(g·K)]
+          <span class="value" id="c1Display">0.10</span>
+        </label>
+        <input type="range" id="c1Slider" min="0.05" max="10" step="0.05" value="0.10">
+      </div>
+      <div class="slider-row">
+        <label>
+          初期温度 T₁ [℃]
+          <span class="value" id="T1InitDisplay">160</span>
+        </label>
+        <input type="range" id="T1InitSlider" min="0" max="200" step="5" value="160">
+      </div>
+      <div class="small-note">
+        熱容量 C₁ = <span id="C1Display">10.0</span> J/K
+      </div>
+    </div>
+
+    <!-- 物体B -->
+    <div class="control-group">
+      <div class="control-group-header">
+        <span class="label">物体B（右）</span>
+        <span class="sub">青寄りの色で表示</span>
+      </div>
+      <div class="slider-row">
+        <label>
+          質量 m₂ [g]
+          <span class="value" id="m2Display">100</span>
+        </label>
+        <input type="range" id="m2Slider" min="10" max="1000" step="10" value="100">
+      </div>
+      <div class="slider-row">
+        <label>
+          比熱 c₂ [J/(g·K)]
+          <span class="value" id="c2Display">0.25</span>
+        </label>
+        <input type="range" id="c2Slider" min="0.05" max="10" step="0.05" value="0.25">
+      </div>
+      <div class="slider-row">
+        <label>
+          初期温度 T₂ [℃]
+          <span class="value" id="T2InitDisplay">20</span>
+        </label>
+        <input type="range" id="T2InitSlider" min="0" max="200" step="5" value="20">
+      </div>
+      <div class="small-note">
+        熱容量 C₂ = <span id="C2Display">25.0</span> J/K
+      </div>
+    </div>
+
+    <div class="small-note">
+      例：レンガと岩の問題に対応させるには，m₁＝m₂＝100 g，c₁＝0.10，c₂＝0.25，T₁＝160 ℃，T₂＝20 ℃ と設定してみてください。
+    </div>
+  </div>
+</div>
+
+<script>
+  // ======== 物理パラメータと状態 ========
+  // 質量は g，比熱は J/(g·K) で扱う
+  let m1 = 100;   // 物体Aの質量 [g]
+  let c1 = 0.10;  // 物体Aの比熱 [J/(g K)]
+  let m2 = 100;   // 物体Bの質量 [g]
+  let c2 = 0.25;  // 物体Bの比熱 [J/(g K)]
+
+  let T1Init = 160; // 物体Aの初期温度 [℃]
+  let T2Init = 20;  // 物体Bの初期温度 [℃]
+
+  let T1 = T1Init;
+  let T2 = T2Init;
+
+  // 熱の伝わりやすさ（比例定数）J/(s·K)
+  let kContact = 10;
+
+  let simTime = 0;   // 経過時間 [s]
+  let Q12 = 0;       // A→B に移動した熱量（符号付き）[J]
+
+  let running = false;
+  let speed = 1.0;
+  let lastTimestamp = null;
+
+  // 近づきアニメーション用
+  let approachProgress = 0;   // 0: 離れている / 1: 接触
+  let blocksTouching = false;
+  let heatWavePhase = 0;
+  const APPROACH_SPEED = 1.0;
+
+  // 温度の履歴（グラフ用）
+  let history = [];
+
+  // ======== DOM要素 ========
+  const simCanvas = document.getElementById('simCanvas');
+  const graphCanvas = document.getElementById('graphCanvas');
+  const graphCard = document.getElementById('graphCard');
+  const showGraphCheckbox = document.getElementById('showGraph');
+
+  const timeDisplay = document.getElementById('timeDisplay');
+  const qDisplay = document.getElementById('qDisplay');
+  const directionDisplay = document.getElementById('directionDisplay');
+  const T1Display = document.getElementById('T1Display');
+  const T2Display = document.getElementById('T2Display');
+
+  const playPauseBtn = document.getElementById('playPauseBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const speedSlider = document.getElementById('speedSlider');
+  const speedDisplay = document.getElementById('speedDisplay');
+  const kSlider = document.getElementById('kSlider');
+  const kDisplay = document.getElementById('kDisplay');
+
+  const m1Slider = document.getElementById('m1Slider');
+  const c1Slider = document.getElementById('c1Slider');
+  const T1InitSlider = document.getElementById('T1InitSlider');
+  const m2Slider = document.getElementById('m2Slider');
+  const c2Slider = document.getElementById('c2Slider');
+  const T2InitSlider = document.getElementById('T2InitSlider');
+
+  const m1Display = document.getElementById('m1Display');
+  const c1Display = document.getElementById('c1Display');
+  const T1InitDisplay = document.getElementById('T1InitDisplay');
+  const m2Display = document.getElementById('m2Display');
+  const c2Display = document.getElementById('c2Display');
+  const T2InitDisplay = document.getElementById('T2InitDisplay');
+  const C1Display = document.getElementById('C1Display');
+  const C2Display = document.getElementById('C2Display');
+
+  let simCtx, graphCtx;
+
+  // ======== キャンバスのサイズ調整 ========
+  function resizeCanvases() {
+    const dpr = window.devicePixelRatio || 1;
+
+    const simRect = simCanvas.getBoundingClientRect();
+    simCanvas.width = simRect.width * dpr;
+    simCanvas.height = simRect.height * dpr;
+    simCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const graphRect = graphCanvas.getBoundingClientRect();
+    graphCanvas.width = graphRect.width * dpr;
+    graphCanvas.height = graphRect.height * dpr;
+    graphCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  // ======== パラメータ表示更新 ========
+  function updateParameterDisplays() {
+    m1Display.textContent = m1.toFixed(0);
+    c1Display.textContent = c1.toFixed(2);
+    T1InitDisplay.textContent = T1Init.toFixed(0);
+
+    m2Display.textContent = m2.toFixed(0);
+    c2Display.textContent = c2.toFixed(2);
+    T2InitDisplay.textContent = T2Init.toFixed(0);
+
+    const C1 = m1 * c1; // [J/K]
+    const C2 = m2 * c2;
+    C1Display.textContent = C1.toFixed(1);
+    C2Display.textContent = C2.toFixed(1);
+
+    speedDisplay.textContent = speed.toFixed(2) + "×";
+    kDisplay.textContent = kContact.toFixed(0) + " J/(s·K)";
+  }
+
+  // ======== 状態リセット ========
+  function resetSimulation() {
+    T1 = T1Init;
+    T2 = T2Init;
+    simTime = 0;
+    Q12 = 0;
+
+    approachProgress = 0;
+    blocksTouching = false;
+    heatWavePhase = 0;
+
+    history = [{ t: 0, T1: T1, T2: T2 }];
+    lastTimestamp = null;
+  }
+
+  // ======== 温度→色の変換 ========
+  function tempToColor(T, isA) {
+    const minT = 0;
+    const maxT = 200;
+    const clamped = Math.min(maxT, Math.max(minT, T));
+    const ratio = (clamped - minT) / (maxT - minT);
+
+    let r1, g1, b1, r2, g2, b2;
+    if (isA) {
+      r1 = 56; g1 = 126; b1 = 214;
+      r2 = 249; g2 = 115; b2 = 22;
+    } else {
+      r1 = 37; g1 = 99; b1 = 235;
+      r2 = 236; g2 = 72; b2 = 153;
+    }
+    const r = Math.round(r1 + (r2 - r1) * ratio);
+    const g = Math.round(g1 + (g2 - g1) * ratio);
+    const b = Math.round(b1 + (b2 - b1) * ratio);
+    return `rgb(${r},${g},${b})`;
+  }
+
+  // ======== 物理計算：一歩進める ========
+  function stepSimulation(dt) {
+    const C1 = m1 * c1; // [J/K]
+    const C2 = m2 * c2;
+    if (C1 <= 0 || C2 <= 0) return;
+
+    const dT = T1 - T2;
+    const dQ = kContact * dT * dt; // A→B を正とする [J]
+
+    const dT1 = -dQ / C1;
+    const dT2 = +dQ / C2;
+
+    T1 += dT1;
+    T2 += dT2;
+    Q12 += dQ;
+  }
+
+  // グラフ用履歴
+  function recordHistory() {
+    const last = history[history.length - 1];
+    if (!last || simTime - last.t > 0.05) {
+      history.push({ t: simTime, T1: T1, T2: T2 });
+      if (history.length > 1500) history.shift();
+    }
+  }
+
+  // ======== 情報表示更新 ========
+  function updateInfoDisplays() {
+    timeDisplay.textContent = simTime.toFixed(1);
+
+    const qAbs = Math.abs(Q12);
+    qDisplay.textContent = qAbs.toFixed(0);
+
+    let direction = "ほぼ 0（平衡）";
+    if (Math.abs(Q12) > 0.5) {
+      direction = Q12 >= 0 ? "A → B" : "B → A";
+    }
+    directionDisplay.textContent = direction;
+
+    T1Display.textContent = T1.toFixed(1);
+    T2Display.textContent = T2.toFixed(1);
+  }
+
+  // ======== メイン描画（物体と矢印） ========
+  function drawSimulation() {
+    const ctx = simCtx;
+    const w = simCanvas.clientWidth;
+    const h = simCanvas.clientHeight;
+
+    ctx.clearRect(0, 0, w, h);
+
+    const grd = ctx.createLinearGradient(0, 0, 0, h);
+    grd.addColorStop(0, "#f3f4f6");
+    grd.addColorStop(1, "#e5e7eb");
+    ctx.fillStyle = grd;
+    ctx.fillRect(0, 0, w, h);
+
+    const margin = 18;
+    const blockHeight = Math.min(h * 0.45, 140);
+    const blockWidth = Math.min((w - margin * 3) / 2, 150);
+    const baseY = h * 0.7;
+
+    const gapMax = blockWidth * 0.8;
+    const gapMin = 10;
+    const currentGap = gapMin + (1 - approachProgress) * (gapMax - gapMin);
+    const totalWidth = blockWidth * 2 + currentGap;
+    const startX = (w - totalWidth) / 2;
+
+    const ax = startX;
+    const ay = baseY - blockHeight;
+    const bx = startX + blockWidth + currentGap;
+    const by = baseY - blockHeight;
+
+    // 物体A
+    ctx.fillStyle = tempToColor(T1, true);
+    roundRect(ctx, ax, ay, blockWidth, blockHeight, 14, true);
+
+    // 物体B
+    ctx.fillStyle = tempToColor(T2, false);
+    roundRect(ctx, bx, by, blockWidth, blockHeight, 14, true);
+
+    // ラベルと温度
+    ctx.fillStyle = "#111827";
+    ctx.font = "14px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI'";
+    ctx.textAlign = "center";
+
+    ctx.fillText("物体A", ax + blockWidth / 2, ay - 6);
+    ctx.fillText("物体B", bx + blockWidth / 2, by - 6);
+
+    ctx.font = "13px system-ui";
+    ctx.fillText(`${T1.toFixed(1)} ℃`, ax + blockWidth / 2, ay + blockHeight / 2);
+    ctx.fillText(`${T2.toFixed(1)} ℃`, bx + blockWidth / 2, by + blockHeight / 2);
+
+    // m, c, C の表示
+    ctx.font = "11px system-ui";
+    ctx.fillText(`m₁=${m1.toFixed(0)} g`, ax + blockWidth / 2, ay + blockHeight + 12);
+    ctx.fillText(`c₁=${c1.toFixed(2)} J/(g·K)`, ax + blockWidth / 2, ay + blockHeight + 26);
+    ctx.fillText(`C₁=${(m1 * c1).toFixed(1)} J/K`, ax + blockWidth / 2, ay + blockHeight + 40);
+
+    ctx.fillText(`m₂=${m2.toFixed(0)} g`, bx + blockWidth / 2, by + blockHeight + 12);
+    ctx.fillText(`c₂=${c2.toFixed(2)} J/(g·K)`, bx + blockWidth / 2, by + blockHeight + 26);
+    ctx.fillText(`C₂=${(m2 * c2).toFixed(1)} J/K`, bx + blockWidth / 2, by + blockHeight + 40);
+
+    // 熱の流れ
+    const centerY = h * 0.25;
+    const leftEdge = ax + blockWidth;
+    const rightEdge = bx;
+
+    const tempDiff = T1 - T2;
+    const arrowStrength = Math.tanh(Math.abs(tempDiff) / 30);
+    const lineWidth = 2 + 6 * arrowStrength;
+
+    if (blocksTouching) {
+      ctx.lineWidth = lineWidth;
+      ctx.lineCap = "round";
+
+      if (Math.abs(tempDiff) > 0.1) {
+        if (tempDiff > 0) {
+          ctx.strokeStyle = "#ef4444";
+          drawArrow(ctx, leftEdge + 4, centerY, rightEdge - 4, centerY);
+          drawHeatParticles(ctx, leftEdge + 4, rightEdge - 4, centerY, true);
+        } else {
+          ctx.strokeStyle = "#0ea5e9";
+          drawArrow(ctx, rightEdge - 4, centerY, leftEdge + 4, centerY);
+          drawHeatParticles(ctx, rightEdge - 4, leftEdge + 4, centerY, false);
+        }
+      } else {
+        ctx.strokeStyle = "#9ca3af";
+        drawArrow(ctx, leftEdge + 4, centerY, rightEdge - 4, centerY);
+      }
+    } else {
+      // まだ接触していないときの点線矢印
+      ctx.setLineDash([6, 6]);
+      ctx.strokeStyle = "#9ca3af";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(leftEdge + 4, centerY);
+      ctx.lineTo(rightEdge - 4, centerY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.font = "11px system-ui";
+      ctx.fillStyle = "#6b7280";
+      ctx.textAlign = "center";
+      ctx.fillText("再生ボタンで物体を接触させます", w / 2, centerY + 18);
+    }
+  }
+
+  // 熱の粒アニメーション
+  function drawHeatParticles(ctx, fromX, toX, y, fromA) {
+    const n = 7;
+    for (let i = 0; i < n; i++) {
+      let t = (i / (n - 1) + heatWavePhase) % 1;
+      const x = fromX + (toX - fromX) * t;
+      ctx.beginPath();
+      ctx.arc(x, y, 3, 0, Math.PI * 2);
+      ctx.fillStyle = fromA ? "rgba(248,113,113,0.9)" : "rgba(59,130,246,0.9)";
+      ctx.fill();
+    }
+  }
+
+  // ======== グラフ描画 ========
+  function drawGraph() {
+    const ctx = graphCtx;
+    const w = graphCanvas.clientWidth;
+    const h = graphCanvas.clientHeight;
+
+    ctx.clearRect(0, 0, w, h);
+
+    if (!showGraphCheckbox.checked || history.length < 2) return;
+
+    const paddingLeft = 40;
+    const paddingRight = 10;
+    const paddingTop = 10;
+    const paddingBottom = 20;
+
+    const innerW = w - paddingLeft - paddingRight;
+    const innerH = h - paddingTop - paddingBottom;
+
+    const tMax = history[history.length - 1].t || 1;
+    let ymax = 30;
+    let ymin = 0;
+    for (const p of history) {
+      ymax = Math.max(ymax, p.T1, p.T2);
+      ymin = Math.min(ymin, p.T1, p.T2);
+    }
+    ymax = Math.ceil(ymax / 20) * 20;
+    ymin = Math.floor(ymin / 20) * 20;
+    if (ymin > 0) ymin = 0;
+
+    const tScale = innerW / Math.max(1e-3, tMax);
+    const tempScale = innerH / Math.max(1e-3, ymax - ymin);
+
+    // 枠
+    ctx.strokeStyle = "#d1d5db";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(paddingLeft, paddingTop, innerW, innerH);
+
+    ctx.font = "10px system-ui";
+    ctx.fillStyle = "#6b7280";
+
+    // y目盛り
+    const yStep = 20;
+    for (let T = ymin; T <= ymax + 0.1; T += yStep) {
+      const y = paddingTop + innerH - (T - ymin) * tempScale;
+      ctx.beginPath();
+      ctx.moveTo(paddingLeft - 3, y);
+      ctx.lineTo(paddingLeft, y);
+      ctx.stroke();
+
+      ctx.fillText(`${T}℃`, 4, y + 3);
+
+      ctx.strokeStyle = "#e5e7eb";
+      ctx.beginPath();
+      ctx.moveTo(paddingLeft, y);
+      ctx.lineTo(paddingLeft + innerW, y);
+      ctx.stroke();
+      ctx.strokeStyle = "#d1d5db";
+    }
+
+    // x目盛り
+    const divisions = 4;
+    for (let i = 0; i <= divisions; i++) {
+      const t = (tMax / divisions) * i;
+      const x = paddingLeft + t * tScale;
+      ctx.beginPath();
+      ctx.moveTo(x, paddingTop + innerH);
+      ctx.lineTo(x, paddingTop + innerH + 3);
+      ctx.stroke();
+
+      ctx.textAlign = "center";
+      ctx.fillText(t.toFixed(1) + "s", x, h - 4);
+    }
+
+    function pathLine(getY, strokeStyle) {
+      ctx.beginPath();
+      history.forEach((p, idx) => {
+        const x = paddingLeft + p.t * tScale;
+        const y = paddingTop + innerH - (getY(p) - ymin) * tempScale;
+        if (idx === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.strokeStyle = strokeStyle;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    pathLine(p => p.T1, "#ef4444");
+    pathLine(p => p.T2, "#3b82f6");
+
+    ctx.font = "11px system-ui";
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#ef4444";
+    ctx.fillText("A の温度", paddingLeft + 6, paddingTop + 14);
+    ctx.fillStyle = "#3b82f6";
+    ctx.fillText("B の温度", paddingLeft + 80, paddingTop + 14);
+  }
+
+  // ======== ユーティリティ：丸角矩形 ========
+  function roundRect(ctx, x, y, w, h, r, fill) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+    if (fill) ctx.fill();
+  }
+
+  // ======== ユーティリティ：矢印 ========
+  function drawArrow(ctx, x1, y1, x2, y2) {
+    const headLength = 10;
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const angle = Math.atan2(dy, dx);
+
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - headLength * Math.cos(angle - Math.PI / 6),
+               y2 - headLength * Math.sin(angle - Math.PI / 6));
+    ctx.lineTo(x2 - headLength * Math.cos(angle + Math.PI / 6),
+               y2 - headLength * Math.sin(angle + Math.PI / 6));
+    ctx.closePath();
+    ctx.fillStyle = ctx.strokeStyle;
+    ctx.fill();
+  }
+
+  // ======== メインループ ========
+  function loop(timestamp) {
+    if (!lastTimestamp) lastTimestamp = timestamp;
+    const realDt = (timestamp - lastTimestamp) / 1000;
+    lastTimestamp = timestamp;
+
+    if (running) {
+      let dtSim = realDt * speed;
+      dtSim = Math.min(dtSim, 0.05);
+
+      // まず近づく。その後で温度変化を開始。
+      if (!blocksTouching) {
+        approachProgress += APPROACH_SPEED * dtSim;
+        if (approachProgress >= 1) {
+          approachProgress = 1;
+          blocksTouching = true;
+        }
+      } else {
+        stepSimulation(dtSim);
+      }
+
+      simTime += dtSim;
+      recordHistory();
+
+      if (blocksTouching && Math.abs(T1 - T2) > 0.1) {
+        heatWavePhase = (heatWavePhase + realDt * 2 * speed) % 1;
+      }
+    }
+
+    drawSimulation();
+    drawGraph();
+    updateInfoDisplays();
+
+    requestAnimationFrame(loop);
+  }
+
+  // ======== イベント設定 ========
+  function setupControls() {
+    playPauseBtn.addEventListener('click', () => {
+      running = !running;
+      if (running) {
+        playPauseBtn.textContent = "❚❚ 一時停止";
+        playPauseBtn.classList.remove('paused');
+      } else {
+        playPauseBtn.textContent = "▶ 再生（接触させる）";
+        playPauseBtn.classList.add('paused');
+      }
+    });
+
+    resetBtn.addEventListener('click', () => {
+      running = false;
+      playPauseBtn.textContent = "▶ 再生（接触させる）";
+      playPauseBtn.classList.add('paused');
+      resetSimulation();
+    });
+
+    speedSlider.addEventListener('input', () => {
+      speed = parseFloat(speedSlider.value);
+      updateParameterDisplays();
+    });
+
+    kSlider.addEventListener('input', () => {
+      kContact = parseFloat(kSlider.value);
+      updateParameterDisplays();
+    });
+
+    function parametersChanged() {
+      // パラメータ変更時は一度止めてリセット
+      running = false;
+      playPauseBtn.textContent = "▶ 再生（接触させる）";
+      playPauseBtn.classList.add('paused');
+      resetSimulation();
+      updateParameterDisplays();
+    }
+
+    m1Slider.addEventListener('input', () => {
+      m1 = parseFloat(m1Slider.value);
+      parametersChanged();
+    });
+    c1Slider.addEventListener('input', () => {
+      c1 = parseFloat(c1Slider.value);
+      parametersChanged();
+    });
+    T1InitSlider.addEventListener('input', () => {
+      T1Init = parseFloat(T1InitSlider.value);
+      parametersChanged();
+    });
+
+    m2Slider.addEventListener('input', () => {
+      m2 = parseFloat(m2Slider.value);
+      parametersChanged();
+    });
+    c2Slider.addEventListener('input', () => {
+      c2 = parseFloat(c2Slider.value);
+      parametersChanged();
+    });
+    T2InitSlider.addEventListener('input', () => {
+      T2Init = parseFloat(T2InitSlider.value);
+      parametersChanged();
+    });
+
+    showGraphCheckbox.addEventListener('change', () => {
+      graphCard.style.display = showGraphCheckbox.checked ? "flex" : "none";
+    });
+
+    graphCard.style.display = showGraphCheckbox.checked ? "flex" : "none";
+  }
+
+  // ======== 初期化 ========
+  window.addEventListener('load', () => {
+    simCtx = simCanvas.getContext('2d');
+    graphCtx = graphCanvas.getContext('2d');
+    resizeCanvases();
+    window.addEventListener('resize', resizeCanvases);
+
+    updateParameterDisplays();
+    resetSimulation();
+    setupControls();
+    requestAnimationFrame(loop);
+  });
+</script>
+</body>
+</html>
